@@ -1,12 +1,14 @@
 import { ModelNotFoundError, BadRequestError } from "../lib/errors";
 import { ClaudeCodeProvider } from "./claude-code";
 import { CodexProvider } from "./codex";
+import { DeepSeekProvider } from "./deepseek";
 import { OpenCodeProvider } from "./opencode";
 import { OpenRouterProvider } from "./openrouter";
 import type { ModelInfo, Provider } from "./types";
 
 const providers: Provider[] = [
   new OpenRouterProvider(),
+  new DeepSeekProvider(),
   new ClaudeCodeProvider(),
   new CodexProvider(),
   new OpenCodeProvider(),

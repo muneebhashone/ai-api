@@ -6,6 +6,14 @@ const optionalReasoningEffort = z.preprocess(
   (value) => (value === "" ? undefined : value),
   z.enum(["low", "medium", "high", "xhigh"]).optional()
 );
+const optionalDeepSeekReasoningEffort = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.enum(["high", "max"]).optional()
+);
+const deepSeekThinkingDefault = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.enum(["enabled", "disabled", "none"]).default("enabled")
+);
 const openRouterProviderSort = z.preprocess(
   (value) => (value === "" ? undefined : value),
   z.enum(["latency", "throughput", "price", "none"]).default("latency")
@@ -17,6 +25,10 @@ const EnvSchema = z.object({
   OPENROUTER_SITE_URL: optionalUrl,
   OPENROUTER_APP_NAME: optionalNonEmpty,
   OPENROUTER_PROVIDER_SORT: openRouterProviderSort,
+  DEEPSEEK_API_KEY: optionalNonEmpty,
+  DEEPSEEK_BASE_URL: optionalUrl.default("https://api.deepseek.com"),
+  DEEPSEEK_DEFAULT_THINKING: deepSeekThinkingDefault,
+  DEEPSEEK_DEFAULT_REASONING_EFFORT: optionalDeepSeekReasoningEffort.default("high"),
   CLAUDE_CODE_BIN: optionalNonEmpty,
   CODEX_BIN: optionalNonEmpty,
   OPENCODE_BIN: optionalNonEmpty,
@@ -24,6 +36,7 @@ const EnvSchema = z.object({
   CODEX_IMAGE_REASONING_EFFORT: optionalReasoningEffort,
   CLI_TIMEOUT_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
   OPENROUTER_TIMEOUT_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
+  DEEPSEEK_TIMEOUT_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
   LLM_LOG: z.string().optional(),
 });
 
@@ -41,6 +54,12 @@ export const config = {
     appName: parsed.data.OPENROUTER_APP_NAME,
     providerSort: parsed.data.OPENROUTER_PROVIDER_SORT,
   },
+  deepseek: {
+    apiKey: parsed.data.DEEPSEEK_API_KEY,
+    baseUrl: parsed.data.DEEPSEEK_BASE_URL.replace(/\/+$/, ""),
+    defaultThinking: parsed.data.DEEPSEEK_DEFAULT_THINKING,
+    defaultReasoningEffort: parsed.data.DEEPSEEK_DEFAULT_REASONING_EFFORT,
+  },
   bin: {
     claudeCode: parsed.data.CLAUDE_CODE_BIN || "claude",
     codex: parsed.data.CODEX_BIN || "codex",
@@ -53,6 +72,7 @@ export const config = {
   timeouts: {
     cliMs: parsed.data.CLI_TIMEOUT_MS,
     openrouterMs: parsed.data.OPENROUTER_TIMEOUT_MS,
+    deepseekMs: parsed.data.DEEPSEEK_TIMEOUT_MS,
   },
   log: parsed.data.LLM_LOG !== "0",
 };

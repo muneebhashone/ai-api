@@ -50,7 +50,7 @@ export const providersRoutes = new Elysia()
     },
     {
       params: t.Object({
-        id: t.String({ description: "Provider id, for example openrouter, codex, claude-code, or opencode." }),
+        id: t.String({ description: "Provider id, for example openrouter, deepseek, codex, claude-code, or opencode." }),
       }),
       response: {
         200: ProviderSchema,
@@ -65,7 +65,7 @@ export const providersRoutes = new Elysia()
             name: "id",
             in: "path",
             required: true,
-            description: "Provider id, for example openrouter, codex, claude-code, or opencode.",
+            description: "Provider id, for example openrouter, deepseek, codex, claude-code, or opencode.",
           },
         ],
       },
