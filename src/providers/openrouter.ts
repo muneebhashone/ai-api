@@ -20,6 +20,10 @@ function shouldEnableDefaultPromptCaching(model: string, extraParams?: Record<st
   return model.startsWith("anthropic/") && extraParams?.cache_control === undefined;
 }
 
+function shouldApplyDefaultProviderSort(extraParams?: Record<string, unknown>): boolean {
+  return config.openrouter.providerSort !== "none" && extraParams?.provider === undefined;
+}
+
 export function buildOpenRouterChatBody(req: ChatRequest): Record<string, unknown> {
   const body: Record<string, unknown> = {
     ...(req.extraParams ?? {}),
@@ -29,6 +33,9 @@ export function buildOpenRouterChatBody(req: ChatRequest): Record<string, unknow
   };
   if (shouldEnableDefaultPromptCaching(req.model, req.extraParams)) {
     body.cache_control = { type: "ephemeral" };
+  }
+  if (shouldApplyDefaultProviderSort(req.extraParams)) {
+    body.provider = { sort: config.openrouter.providerSort };
   }
   if (req.temperature !== undefined) body.temperature = req.temperature;
   if (req.topP !== undefined) body.top_p = req.topP;

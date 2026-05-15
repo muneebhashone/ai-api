@@ -6,12 +6,17 @@ const optionalReasoningEffort = z.preprocess(
   (value) => (value === "" ? undefined : value),
   z.enum(["low", "medium", "high", "xhigh"]).optional()
 );
+const openRouterProviderSort = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.enum(["latency", "throughput", "price", "none"]).default("latency")
+);
 
 const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   OPENROUTER_API_KEY: optionalNonEmpty,
   OPENROUTER_SITE_URL: optionalUrl,
   OPENROUTER_APP_NAME: optionalNonEmpty,
+  OPENROUTER_PROVIDER_SORT: openRouterProviderSort,
   CLAUDE_CODE_BIN: optionalNonEmpty,
   CODEX_BIN: optionalNonEmpty,
   OPENCODE_BIN: optionalNonEmpty,
@@ -34,6 +39,7 @@ export const config = {
     apiKey: parsed.data.OPENROUTER_API_KEY,
     siteUrl: parsed.data.OPENROUTER_SITE_URL,
     appName: parsed.data.OPENROUTER_APP_NAME,
+    providerSort: parsed.data.OPENROUTER_PROVIDER_SORT,
   },
   bin: {
     claudeCode: parsed.data.CLAUDE_CODE_BIN || "claude",

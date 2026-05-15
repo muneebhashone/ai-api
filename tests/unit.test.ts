@@ -71,3 +71,26 @@ describe("OpenRouter prompt caching", () => {
     expect(body.cache_control).toBeUndefined();
   });
 });
+
+describe("OpenRouter provider routing", () => {
+  test("sorts providers by latency by default", () => {
+    const body = buildOpenRouterChatBody({
+      model: "openai/gpt-4.1",
+      messages: [{ role: "user", content: "hello" }],
+      stream: false,
+    });
+
+    expect(body.provider).toEqual({ sort: "latency" });
+  });
+
+  test("preserves caller-provided provider routing", () => {
+    const body = buildOpenRouterChatBody({
+      model: "openai/gpt-4.1",
+      messages: [{ role: "user", content: "hello" }],
+      stream: false,
+      extraParams: { provider: { sort: "throughput", allow_fallbacks: true } },
+    });
+
+    expect(body.provider).toEqual({ sort: "throughput", allow_fallbacks: true });
+  });
+});

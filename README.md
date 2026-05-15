@@ -13,3 +13,7 @@ bun run dev
 ```
 
 Open http://localhost:3000/ with your browser to see the result.
+
+## OpenRouter tuning
+
+OpenRouter requests default to `provider.sort = "latency"` when the caller does not provide a `provider` object. Override with `OPENROUTER_PROVIDER_SORT=throughput`, `price`, or `none`.
