@@ -6,7 +6,7 @@ import { chatRoutes } from "./routes/chat";
 import { imageRoutes } from "./routes/images";
 import { modelsRoutes } from "./routes/models";
 import { providersRoutes } from "./routes/providers";
-import { HealthResponseSchema, RootResponseSchema } from "./openapi-schemas";
+import { HealthResponseSchema } from "./openapi-schemas";
 import { stat, readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { isWithinDirectory } from "./lib/path-safety";
@@ -41,19 +41,27 @@ const app = new Elysia()
   })
   .get(
     "/",
-    () => ({
-      name: "ai-api gateway",
-      version: "0.1.0",
-      docs: "/openapi",
-      routes: ["/openapi", "/v1/models", "/v1/models/:id", "/v1/providers", "/v1/providers/:id", "/v1/providers/:id/models", "/v1/chat/completions", "/v1/images/generations"],
-    }),
+    async ({ request, set }) => {
+      const accept = request.headers.get("accept") ?? "";
+      if (accept.includes("text/html")) {
+        const indexPath = resolve(process.cwd(), "public", "index.html");
+        const info = await stat(indexPath).catch(() => null);
+        if (info?.isFile()) {
+          set.headers["Content-Type"] = "text/html; charset=utf-8";
+          return new Response(await readFile(indexPath));
+        }
+      }
+      return {
+        name: "ai-api gateway",
+        version: "0.1.0",
+        docs: "/openapi",
+        routes: ["/openapi", "/v1/models", "/v1/models/:id", "/v1/providers", "/v1/providers/:id", "/v1/providers/:id/models", "/v1/chat/completions", "/v1/images/generations"],
+      };
+    },
     {
-      response: {
-        200: RootResponseSchema,
-      },
       detail: {
         summary: "Service info",
-        description: "Returns basic gateway metadata and primary route links.",
+        description: "Returns the landing page for browsers, or gateway metadata JSON for API clients.",
         tags: ["system"],
       },
     }

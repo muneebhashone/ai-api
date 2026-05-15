@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ai-api · OpenAI-compatible gateway</title>
+<meta name="description" content="A single OpenAI-compatible endpoint in front of OpenRouter, Claude Code, Codex CLI, and OpenCode. Built on Bun + Elysia." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: oklch(98% 0.012 80);
+    --bg-2: oklch(96% 0.014 80);
+    --ink: oklch(18% 0.012 60);
+    --ink-2: oklch(38% 0.012 60);
+    --ink-3: oklch(58% 0.012 60);
+    --rule: oklch(88% 0.012 70);
+    --rule-2: oklch(92% 0.010 70);
+    --accent: oklch(62% 0.205 35);
+    --accent-ink: oklch(98% 0.010 80);
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: "Inter", system-ui, -apple-system, sans-serif;
+    --serif: "Fraunces", "Iowan Old Style", Georgia, serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: oklch(16% 0.010 60);
+      --bg-2: oklch(20% 0.012 60);
+      --ink: oklch(96% 0.008 80);
+      --ink-2: oklch(76% 0.010 70);
+      --ink-3: oklch(56% 0.010 65);
+      --rule: oklch(28% 0.010 60);
+      --rule-2: oklch(24% 0.010 60);
+      --accent: oklch(72% 0.18 40);
+      --accent-ink: oklch(16% 0.010 60);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); transition: border-color .25s cubic-bezier(.16,1,.3,1), color .25s; }
+  a:hover { border-color: var(--accent); color: var(--accent); }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 56px); }
+
+  /* Top bar */
+  header.top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--rule-2);
+  }
+  .brand {
+    display: inline-flex; align-items: baseline; gap: 10px;
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    letter-spacing: .02em;
+  }
+  .brand-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent) 18%, transparent);
+    transform: translateY(-1px);
+  }
+  .top nav { display: flex; gap: 28px; font-family: var(--mono); font-size: 12.5px; }
+  .top nav a { border: none; color: var(--ink-2); }
+  .top nav a:hover { color: var(--accent); }
+
+  /* Hero */
+  .hero { padding: clamp(64px, 12vw, 140px) 0 clamp(56px, 10vw, 120px); }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-3);
+    display: inline-flex; align-items: center; gap: 12px;
+    margin-bottom: 28px;
+  }
+  .eyebrow::before {
+    content: ""; width: 24px; height: 1px; background: var(--ink-3);
+  }
+  h1.title {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: clamp(44px, 8vw, 96px);
+    line-height: 0.98;
+    letter-spacing: -0.025em;
+    margin: 0 0 32px;
+    max-width: 14ch;
+  }
+  h1.title em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent);
+  }
+  .lede {
+    font-size: clamp(17px, 1.6vw, 19px);
+    line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 58ch;
+    margin: 0 0 40px;
+  }
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 13px; font-weight: 500;
+    padding: 12px 18px; border-radius: 999px;
+    border: 1px solid var(--ink);
+    background: var(--ink); color: var(--bg);
+    transition: transform .25s cubic-bezier(.16,1,.3,1), background .2s, color .2s;
+  }
+  .btn:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); transform: translateY(-1px); }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--rule); }
+  .btn.ghost:hover { border-color: var(--accent); color: var(--accent); background: transparent; transform: translateY(-1px); }
+  .btn .arrow { transition: transform .25s cubic-bezier(.16,1,.3,1); }
+  .btn:hover .arrow { transform: translateX(3px); }
+
+  /* Status pill */
+  .status {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+    margin-left: 6px;
+  }
+  .status .pulse {
+    width: 7px; height: 7px; border-radius: 50%; background: oklch(70% 0.18 145);
+    box-shadow: 0 0 0 0 color-mix(in oklch, oklch(70% 0.18 145) 60%, transparent);
+    animation: pulse 2s cubic-bezier(.16,1,.3,1) infinite;
+  }
+  .status[data-state="down"] .pulse { background: oklch(60% 0.18 25); }
+  .status[data-state="unknown"] .pulse { background: var(--ink-3); animation: none; }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 color-mix(in oklch, oklch(70% 0.18 145) 50%, transparent); }
+    70%  { box-shadow: 0 0 0 10px color-mix(in oklch, oklch(70% 0.18 145) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in oklch, oklch(70% 0.18 145) 0%, transparent); }
+  }
+
+  /* Section rhythm */
+  section { padding: clamp(56px, 8vw, 96px) 0; border-top: 1px solid var(--rule-2); }
+  .section-head {
+    display: grid; grid-template-columns: 180px 1fr; gap: 48px;
+    align-items: baseline; margin-bottom: 56px;
+  }
+  .section-num {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+    letter-spacing: .1em;
+  }
+  .section-title {
+    font-family: var(--serif); font-weight: 500;
+    font-size: clamp(28px, 4vw, 40px);
+    line-height: 1.05; letter-spacing: -.02em;
+    margin: 0; max-width: 22ch;
+  }
+  @media (max-width: 720px) {
+    .section-head { grid-template-columns: 1fr; gap: 16px; margin-bottom: 40px; }
+  }
+
+  /* Features — typographic list, not cards */
+  .features { display: grid; grid-template-columns: 1fr; gap: 0; }
+  .feat {
+    display: grid; grid-template-columns: 180px 1fr 1fr; gap: 48px;
+    padding: 28px 0; border-top: 1px solid var(--rule-2);
+    align-items: baseline;
+  }
+  .feat:last-child { border-bottom: 1px solid var(--rule-2); }
+  .feat-tag {
+    font-family: var(--mono); font-size: 11.5px;
+    color: var(--ink-3); letter-spacing: .12em; text-transform: uppercase;
+  }
+  .feat-name {
+    font-family: var(--serif); font-weight: 500; font-size: 22px;
+    line-height: 1.2; letter-spacing: -.01em;
+  }
+  .feat-desc { color: var(--ink-2); font-size: 15px; line-height: 1.6; }
+  .feat-desc code { font-family: var(--mono); font-size: 13px; color: var(--ink); background: var(--bg-2); padding: 1px 6px; border-radius: 4px; }
+  @media (max-width: 860px) {
+    .feat { grid-template-columns: 1fr; gap: 8px; padding: 24px 0; }
+    .feat-name { font-size: 19px; }
+  }
+
+  /* Code block */
+  .code {
+    background: var(--bg-2);
+    border: 1px solid var(--rule-2);
+    border-radius: 12px;
+    overflow: hidden;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .code-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule-2);
+    background: color-mix(in oklch, var(--bg) 60%, transparent);
+  }
+  .code-tabs { display: flex; gap: 4px; }
+  .code-tab {
+    padding: 6px 12px; border-radius: 6px; font-size: 12px;
+    color: var(--ink-3); cursor: pointer; user-select: none;
+    transition: color .2s, background .2s;
+    background: transparent; border: none; font-family: var(--mono);
+  }
+  .code-tab[aria-selected="true"] { color: var(--ink); background: var(--bg); }
+  .code-tab:hover:not([aria-selected="true"]) { color: var(--ink-2); }
+  .copy {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+    background: transparent; border: none; cursor: pointer; padding: 4px 8px;
+    border-radius: 6px; transition: color .2s, background .2s;
+  }
+  .copy:hover { color: var(--accent); background: var(--bg); }
+  .copy[data-state="copied"] { color: oklch(62% 0.16 145); }
+  .code pre {
+    margin: 0; padding: 20px 22px; overflow-x: auto;
+    color: var(--ink);
+  }
+  .code .panel { display: none; }
+  .code .panel.active { display: block; }
+  .tok-comment { color: var(--ink-3); font-style: italic; }
+  .tok-str { color: oklch(52% 0.16 145); }
+  @media (prefers-color-scheme: dark) {
+    .tok-str { color: oklch(75% 0.14 145); }
+  }
+  .tok-key { color: var(--accent); }
+  .tok-method { color: var(--accent); font-weight: 600; }
+
+  /* Endpoints table */
+  .endpoints { display: grid; grid-template-columns: 1fr; gap: 0; }
+  .ep {
+    display: grid; grid-template-columns: 80px 1fr 2fr 100px; gap: 24px;
+    padding: 18px 0; border-top: 1px solid var(--rule-2);
+    align-items: center;
+    font-family: var(--mono); font-size: 13.5px;
+  }
+  .ep:last-child { border-bottom: 1px solid var(--rule-2); }
+  .ep:hover { background: color-mix(in oklch, var(--bg-2) 70%, transparent); }
+  .ep .m {
+    font-size: 11px; font-weight: 600; letter-spacing: .08em;
+    color: var(--ink-3); text-transform: uppercase;
+  }
+  .ep .m.post { color: var(--accent); }
+  .ep .m.get { color: oklch(55% 0.14 215); }
+  @media (prefers-color-scheme: dark) {
+    .ep .m.get { color: oklch(72% 0.13 215); }
+  }
+  .ep .path { color: var(--ink); }
+  .ep .desc { color: var(--ink-2); font-family: var(--sans); font-size: 14px; }
+  .ep .try { text-align: right; }
+  .ep .try a { font-family: var(--mono); font-size: 12px; color: var(--ink-3); border: none; }
+  .ep .try a:hover { color: var(--accent); }
+  @media (max-width: 760px) {
+    .ep { grid-template-columns: 60px 1fr; row-gap: 4px; }
+    .ep .desc, .ep .try { grid-column: 1 / -1; padding-left: 84px; }
+  }
+
+  /* Providers */
+  .providers {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1px; background: var(--rule-2);
+    border: 1px solid var(--rule-2); border-radius: 14px; overflow: hidden;
+  }
+  .prov {
+    background: var(--bg);
+    padding: 28px 26px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .prov-id {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+    letter-spacing: .08em; text-transform: uppercase;
+  }
+  .prov-name { font-family: var(--serif); font-size: 22px; font-weight: 500; line-height: 1.15; }
+  .prov-note { font-size: 14px; color: var(--ink-2); line-height: 1.55; margin-top: 4px; }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--rule-2);
+    padding: 40px 0 56px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 16px;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+  }
+  footer .v { font-feature-settings: "tnum"; }
+
+  /* Reveal */
+  [data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1); }
+  [data-reveal].in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    [data-reveal] { opacity: 1; transform: none; transition: none; }
+    .status .pulse { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand"><span class="brand-dot" aria-hidden="true"></span>ai-api / gateway</div>
+    <nav>
+      <a href="/openapi">openapi</a>
+      <a href="#endpoints">endpoints</a>
+      <a href="#quickstart">quickstart</a>
+      <a href="#providers">providers</a>
+    </nav>
+  </header>
+
+  <section class="hero" data-reveal>
+    <div class="eyebrow">v0.1.0 · OpenAI-compatible</div>
+    <h1 class="title">One endpoint. <em>Every</em> model you already pay for.</h1>
+    <p class="lede">
+      A single, OpenAI-shaped HTTP gateway in front of <strong>OpenRouter</strong>, <strong>Claude Code</strong>, <strong>Codex CLI</strong>, and <strong>OpenCode</strong>. Drop in any SDK that speaks <code style="font-family:var(--mono);font-size:14px;background:var(--bg-2);padding:2px 6px;border-radius:4px;">/v1/chat/completions</code>, pick a model by namespace, and ship.
+    </p>
+    <div class="cta-row">
+      <a class="btn" href="/openapi">OpenAPI reference <span class="arrow">→</span></a>
+      <a class="btn ghost" href="#quickstart">Quickstart</a>
+      <span class="status" id="status" data-state="unknown" title="gateway health"><span class="pulse"></span><span id="status-text">checking…</span></span>
+    </div>
+  </section>
+
+  <section id="features" data-reveal>
+    <div class="section-head">
+      <div class="section-num">01 — features</div>
+      <h2 class="section-title">Thin, predictable, drop-in.</h2>
+    </div>
+    <div class="features">
+      <div class="feat">
+        <div class="feat-tag">Compat</div>
+        <div class="feat-name">OpenAI wire format</div>
+        <div class="feat-desc">Same request shape, same response shape, same SSE chunks. Point the official <code>openai</code> SDK at this gateway's base URL and it just works.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-tag">Routing</div>
+        <div class="feat-name">Namespaced model IDs</div>
+        <div class="feat-desc">Models are addressed as <code>provider/native-id</code> — e.g. <code>openrouter/anthropic/claude-sonnet-4.5</code>. No global ID collisions, no surprises.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-tag">Stream</div>
+        <div class="feat-name">First-class SSE</div>
+        <div class="feat-desc">Token-by-token streaming for every provider, normalized to OpenAI delta chunks with <code>[DONE]</code> sentinels. Reasoning effort passthrough included.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-tag">Local</div>
+        <div class="feat-name">CLI providers as HTTP</div>
+        <div class="feat-desc">Wraps <code>claude</code>, <code>codex</code>, and <code>opencode</code> CLIs behind the same OpenAI shape. Local models become a normal API call.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-tag">Images</div>
+        <div class="feat-name">Image generation</div>
+        <div class="feat-desc">A <code>/v1/images/generations</code> route mirrors the OpenAI image API, with generated assets served from <code>/generated/*</code>.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-tag">Docs</div>
+        <div class="feat-name">Live OpenAPI</div>
+        <div class="feat-desc">Schemas are generated from the route definitions, not hand-written. Browse <a href="/openapi">/openapi</a> for the always-current contract.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-tag">Runtime</div>
+        <div class="feat-name">Bun + Elysia</div>
+        <div class="feat-desc">Single binary dev loop, sub-millisecond router, zero-config TypeScript. <code>bun run dev</code> and you're online.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="quickstart" data-reveal>
+    <div class="section-head">
+      <div class="section-num">02 — quickstart</div>
+      <h2 class="section-title">Talk to it in ten seconds.</h2>
+    </div>
+
+    <div class="code" role="tabpanel" aria-label="quickstart code">
+      <div class="code-head">
+        <div class="code-tabs" role="tablist">
+          <button class="code-tab" role="tab" aria-selected="true" data-tab="curl">curl</button>
+          <button class="code-tab" role="tab" aria-selected="false" data-tab="ts">typescript</button>
+          <button class="code-tab" role="tab" aria-selected="false" data-tab="py">python</button>
+        </div>
+        <button class="copy" id="copy-btn" type="button">copy</button>
+      </div>
+
+      <div class="panel active" data-panel="curl"><pre><span class="tok-comment"># streamed chat completion via the gateway</span>
+curl <span class="tok-str">"http://127.0.0.1:3000/v1/chat/completions"</span> \
+  -H <span class="tok-str">"Content-Type: application/json"</span> \
+  -d <span class="tok-str">'{
+    "model": "openrouter/anthropic/claude-sonnet-4.5",
+    "stream": true,
+    "messages": [
+      { "role": "user", "content": "Write a haiku about Bun." }
+    ]
+  }'</span></pre></div>
+
+      <div class="panel" data-panel="ts"><pre><span class="tok-key">import</span> OpenAI <span class="tok-key">from</span> <span class="tok-str">"openai"</span>;
+
+<span class="tok-key">const</span> client = <span class="tok-key">new</span> <span class="tok-method">OpenAI</span>({
+  baseURL: <span class="tok-str">"http://127.0.0.1:3000/v1"</span>,
+  apiKey: <span class="tok-str">"unused"</span>, <span class="tok-comment">// gateway forwards your provider keys</span>
+});
+
+<span class="tok-key">const</span> stream = <span class="tok-key">await</span> client.chat.completions.<span class="tok-method">create</span>({
+  model: <span class="tok-str">"claude-code/claude-sonnet-4-5"</span>,
+  stream: <span class="tok-key">true</span>,
+  messages: [{ role: <span class="tok-str">"user"</span>, content: <span class="tok-str">"hello"</span> }],
+});
+
+<span class="tok-key">for await</span> (<span class="tok-key">const</span> chunk <span class="tok-key">of</span> stream) {
+  process.stdout.<span class="tok-method">write</span>(chunk.choices[<span class="tok-str">0</span>]?.delta?.content ?? <span class="tok-str">""</span>);
+}</pre></div>
+
+      <div class="panel" data-panel="py"><pre><span class="tok-key">from</span> openai <span class="tok-key">import</span> OpenAI
+
+client = <span class="tok-method">OpenAI</span>(
+    base_url=<span class="tok-str">"http://127.0.0.1:3000/v1"</span>,
+    api_key=<span class="tok-str">"unused"</span>,
+)
+
+stream = client.chat.completions.<span class="tok-method">create</span>(
+    model=<span class="tok-str">"codex/gpt-5-codex"</span>,
+    stream=<span class="tok-key">True</span>,
+    messages=[{<span class="tok-str">"role"</span>: <span class="tok-str">"user"</span>, <span class="tok-str">"content"</span>: <span class="tok-str">"hello"</span>}],
+)
+
+<span class="tok-key">for</span> chunk <span class="tok-key">in</span> stream:
+    <span class="tok-method">print</span>(chunk.choices[<span class="tok-str">0</span>].delta.content <span class="tok-key">or</span> <span class="tok-str">""</span>, end=<span class="tok-str">""</span>)</pre></div>
+    </div>
+  </section>
+
+  <section id="endpoints" data-reveal>
+    <div class="section-head">
+      <div class="section-num">03 — endpoints</div>
+      <h2 class="section-title">The whole surface fits on one screen.</h2>
+    </div>
+    <div class="endpoints">
+      <div class="ep"><span class="m post">POST</span><span class="path">/v1/chat/completions</span><span class="desc">Chat completion. Streaming and non-streaming. OpenAI-shape in, OpenAI-shape out.</span><span class="try"><a href="/openapi#tag/chat">spec →</a></span></div>
+      <div class="ep"><span class="m post">POST</span><span class="path">/v1/images/generations</span><span class="desc">Generate images. Returns URLs served from <code style="font-family:var(--mono)">/generated/*</code>.</span><span class="try"><a href="/openapi#tag/images">spec →</a></span></div>
+      <div class="ep"><span class="m get">GET</span><span class="path">/v1/models</span><span class="desc">Aggregated model catalog across every registered provider.</span><span class="try"><a href="/v1/models">try →</a></span></div>
+      <div class="ep"><span class="m get">GET</span><span class="path">/v1/models/:id</span><span class="desc">Fetch a single namespaced model by id.</span><span class="try"><a href="/openapi#tag/models">spec →</a></span></div>
+      <div class="ep"><span class="m get">GET</span><span class="path">/v1/providers</span><span class="desc">List the providers wired into this gateway.</span><span class="try"><a href="/v1/providers">try →</a></span></div>
+      <div class="ep"><span class="m get">GET</span><span class="path">/v1/providers/:id/models</span><span class="desc">List models for a single provider.</span><span class="try"><a href="/openapi#tag/providers">spec →</a></span></div>
+      <div class="ep"><span class="m get">GET</span><span class="path">/openapi</span><span class="desc">The full OpenAPI document, generated from the live route definitions.</span><span class="try"><a href="/openapi">open →</a></span></div>
+      <div class="ep"><span class="m get">GET</span><span class="path">/healthz</span><span class="desc">Liveness probe. Returns <code style="font-family:var(--mono)">{ ok: true }</code>.</span><span class="try"><a href="/healthz">ping →</a></span></div>
+    </div>
+  </section>
+
+  <section id="providers" data-reveal>
+    <div class="section-head">
+      <div class="section-num">04 — providers</div>
+      <h2 class="section-title">Four backends, one shape.</h2>
+    </div>
+    <div class="providers">
+      <div class="prov">
+        <div class="prov-id">openrouter</div>
+        <div class="prov-name">OpenRouter</div>
+        <div class="prov-note">Hosted catalog of frontier and open models, routed through one API key.</div>
+      </div>
+      <div class="prov">
+        <div class="prov-id">claude-code</div>
+        <div class="prov-name">Claude Code</div>
+        <div class="prov-note">Anthropic's coding CLI, wrapped as a streaming OpenAI endpoint.</div>
+      </div>
+      <div class="prov">
+        <div class="prov-id">codex</div>
+        <div class="prov-name">Codex CLI</div>
+        <div class="prov-note">OpenAI's coding CLI, exposed as a chat completion route.</div>
+      </div>
+      <div class="prov">
+        <div class="prov-id">opencode</div>
+        <div class="prov-name">OpenCode</div>
+        <div class="prov-note">Open-source agentic coder, callable from any OpenAI client.</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>ai-api gateway · <span class="v">v0.1.0</span></span>
+    <span><a href="/openapi">/openapi</a> · <a href="/healthz">/healthz</a> · <a href="/v1/models">/v1/models</a></span>
+  </footer>
+
+</div>
+
+<script>
+  // Tabs
+  const tabs = document.querySelectorAll(".code-tab");
+  const panels = document.querySelectorAll(".panel");
+  tabs.forEach(t => t.addEventListener("click", () => {
+    tabs.forEach(x => x.setAttribute("aria-selected", "false"));
+    panels.forEach(p => p.classList.remove("active"));
+    t.setAttribute("aria-selected", "true");
+    document.querySelector(`.panel[data-panel="${t.dataset.tab}"]`).classList.add("active");
+  }));
+
+  // Copy
+  const copyBtn = document.getElementById("copy-btn");
+  copyBtn.addEventListener("click", async () => {
+    const active = document.querySelector(".panel.active pre");
+    try {
+      await navigator.clipboard.writeText(active.innerText);
+      copyBtn.textContent = "copied";
+      copyBtn.dataset.state = "copied";
+      setTimeout(() => { copyBtn.textContent = "copy"; delete copyBtn.dataset.state; }, 1400);
+    } catch {
+      copyBtn.textContent = "press ⌘C";
+    }
+  });
+
+  // Reveal on scroll
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
+  }, { threshold: 0.08 });
+  document.querySelectorAll("[data-reveal]").forEach(el => io.observe(el));
+
+  // Health check
+  (async () => {
+    const el = document.getElementById("status");
+    const txt = document.getElementById("status-text");
+    try {
+      const t0 = performance.now();
+      const r = await fetch("/healthz", { cache: "no-store" });
+      const ms = Math.round(performance.now() - t0);
+      if (r.ok) {
+        el.dataset.state = "up";
+        txt.textContent = `live · ${ms}ms`;
+      } else {
+        el.dataset.state = "down";
+        txt.textContent = `degraded · ${r.status}`;
+      }
+    } catch {
+      el.dataset.state = "down";
+      txt.textContent = "offline";
+    }
+  })();
+</script>
+
+</body>
+</html>
