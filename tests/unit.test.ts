@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { isWithinDirectory } from "../src/lib/path-safety";
 import { parseModelId } from "../src/providers/registry";
 import { parseCodexModelEntries } from "../src/providers/codex";
+import { buildOpenRouterChatBody } from "../src/providers/openrouter";
 
 describe("model ids", () => {
   test("parses provider prefix only once", () => {
@@ -35,5 +36,38 @@ describe("path containment", () => {
   test("rejects sibling prefix paths", () => {
     const root = resolve("generated");
     expect(isWithinDirectory(root, resolve("generated-other", "image.png"))).toBe(false);
+  });
+});
+
+describe("OpenRouter prompt caching", () => {
+  test("enables Anthropic automatic prompt caching by default", () => {
+    const body = buildOpenRouterChatBody({
+      model: "anthropic/claude-sonnet-4.6",
+      messages: [{ role: "user", content: "hello" }],
+      stream: false,
+    });
+
+    expect(body.cache_control).toEqual({ type: "ephemeral" });
+  });
+
+  test("preserves caller-provided cache control", () => {
+    const body = buildOpenRouterChatBody({
+      model: "anthropic/claude-sonnet-4.6",
+      messages: [{ role: "user", content: "hello" }],
+      stream: false,
+      extraParams: { cache_control: { type: "ephemeral", ttl: "1h" } },
+    });
+
+    expect(body.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
+  });
+
+  test("does not add explicit cache control for providers with implicit caching", () => {
+    const body = buildOpenRouterChatBody({
+      model: "openai/gpt-4.1",
+      messages: [{ role: "user", content: "hello" }],
+      stream: false,
+    });
+
+    expect(body.cache_control).toBeUndefined();
   });
 });

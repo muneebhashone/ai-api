@@ -16,6 +16,31 @@ interface OpenRouterModel {
   supported_parameters?: string[];
 }
 
+function shouldEnableDefaultPromptCaching(model: string, extraParams?: Record<string, unknown>): boolean {
+  return model.startsWith("anthropic/") && extraParams?.cache_control === undefined;
+}
+
+export function buildOpenRouterChatBody(req: ChatRequest): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    ...(req.extraParams ?? {}),
+    model: req.model,
+    messages: req.messages,
+    stream: req.stream,
+  };
+  if (shouldEnableDefaultPromptCaching(req.model, req.extraParams)) {
+    body.cache_control = { type: "ephemeral" };
+  }
+  if (req.temperature !== undefined) body.temperature = req.temperature;
+  if (req.topP !== undefined) body.top_p = req.topP;
+  if (req.maxTokens !== undefined) body.max_tokens = req.maxTokens;
+  if (req.stop !== undefined) body.stop = req.stop;
+  if (req.jsonMode) body.response_format = { type: "json_object" };
+  if (req.reasoningEffort && req.reasoningEffort !== "max") {
+    body.reasoning = { effort: req.reasoningEffort };
+  }
+  return body;
+}
+
 export class OpenRouterProvider implements Provider {
   id = "openrouter";
   capabilities = {
@@ -90,20 +115,7 @@ export class OpenRouterProvider implements Provider {
   }
 
   async *chat(req: ChatRequest): AsyncIterable<ChatChunk> {
-    const body: Record<string, unknown> = {
-      ...(req.extraParams ?? {}),
-      model: req.model,
-      messages: req.messages,
-      stream: req.stream,
-    };
-    if (req.temperature !== undefined) body.temperature = req.temperature;
-    if (req.topP !== undefined) body.top_p = req.topP;
-    if (req.maxTokens !== undefined) body.max_tokens = req.maxTokens;
-    if (req.stop !== undefined) body.stop = req.stop;
-    if (req.jsonMode) body.response_format = { type: "json_object" };
-    if (req.reasoningEffort && req.reasoningEffort !== "max") {
-      body.reasoning = { effort: req.reasoningEffort };
-    }
+    const body = buildOpenRouterChatBody(req);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.timeouts.openrouterMs);
