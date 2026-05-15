@@ -3,6 +3,7 @@ import { z } from "zod";
 import { BadRequestError } from "../lib/errors";
 import { buildChatCompletion, buildChunk, newCompletionId } from "../lib/openai-shape";
 import { SSE_DONE, SSE_HEADERS, sseFrame } from "../lib/sse";
+import { ChatCompletionRequestSchema, ChatCompletionSchema, ErrorSchema } from "../openapi-schemas";
 import { getProvider, parseModelId } from "../providers/registry";
 import type { ChatChunk, ChatRequest } from "../providers/types";
 
@@ -45,112 +46,129 @@ function collectExtraParams(body: Record<string, unknown>): Record<string, unkno
   return extra;
 }
 
-export const chatRoutes = new Elysia().post("/v1/chat/completions", async ({ body, set }) => {
-  const parsed = BodySchema.safeParse(body);
-  if (!parsed.success) {
-    throw new BadRequestError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
-  }
-  const { providerId, nativeId } = parseModelId(parsed.data.model);
-  const provider = getProvider(providerId);
-
-  const stream = parsed.data.stream === true;
-  const req: ChatRequest = {
-    model: nativeId,
-    messages: parsed.data.messages as ChatRequest["messages"],
-    stream,
-    temperature: parsed.data.temperature,
-    topP: parsed.data.top_p,
-    maxTokens: parsed.data.max_tokens,
-    stop: parsed.data.stop,
-    jsonMode: parsed.data.response_format?.type === "json_object",
-    reasoningEffort: parsed.data.reasoning_effort ?? parsed.data.reasoning?.effort,
-    extraParams: collectExtraParams(parsed.data),
-  };
-
-  const id = newCompletionId();
-
-  if (!stream) {
-    let content = "";
-    let usage;
-    let finishReason = "stop";
-    let message: Record<string, unknown> | undefined;
-    for await (const chunk of provider.chat(req)) {
-      content += chunk.delta;
-      if (chunk.message) message = chunk.message;
-      if (chunk.usage) usage = chunk.usage;
-      if (chunk.finishReason) finishReason = chunk.finishReason;
+export const chatRoutes = new Elysia().post(
+  "/v1/chat/completions",
+  async ({ body, set }: { body: unknown; set: Record<string, any> }): Promise<any> => {
+    const parsed = BodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
     }
-    return buildChatCompletion({
-      id,
-      model: parsed.data.model,
-      content,
-      usage,
-      finishReason,
-      message,
-    });
-  }
+    const { providerId, nativeId } = parseModelId(parsed.data.model);
+    const provider = getProvider(providerId);
 
-  // Streaming response
-  for (const [k, v] of Object.entries(SSE_HEADERS)) set.headers[k] = v;
-  set.headers["Transfer-Encoding"] = "chunked";
+    const stream = parsed.data.stream === true;
+    const req: ChatRequest = {
+      model: nativeId,
+      messages: parsed.data.messages as ChatRequest["messages"],
+      stream,
+      temperature: parsed.data.temperature,
+      topP: parsed.data.top_p,
+      maxTokens: parsed.data.max_tokens,
+      stop: parsed.data.stop,
+      jsonMode: parsed.data.response_format?.type === "json_object",
+      reasoningEffort: parsed.data.reasoning_effort ?? parsed.data.reasoning?.effort,
+      extraParams: collectExtraParams(parsed.data),
+    };
 
-  const encoder = new TextEncoder();
-  const iterable = provider.chat(req);
-  let iterator: (AsyncIterator<ChatChunk> & { return?: () => Promise<IteratorResult<ChatChunk>> }) | undefined;
-  const modelLabel = parsed.data.model;
+    const id = newCompletionId();
 
-  const body$ = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      try {
-        // Initial chunk with role
-        controller.enqueue(
-          encoder.encode(
-            sseFrame(buildChunk({ id, model: modelLabel, delta: "", role: "assistant" }))
-          )
-        );
-        let finalUsage;
-        let finalFinish = "stop";
-        iterator = iterable[Symbol.asyncIterator]();
-        while (true) {
-          const next = await iterator.next();
-          if (next.done) break;
-          const chunk = next.value;
-          if (chunk.delta || chunk.deltaExtra) {
-            controller.enqueue(
-              encoder.encode(sseFrame(buildChunk({ id, model: modelLabel, delta: chunk.delta, deltaExtra: chunk.deltaExtra })))
-            );
-          }
-          if (chunk.usage) finalUsage = chunk.usage;
-          if (chunk.finishReason) finalFinish = chunk.finishReason;
-        }
-        controller.enqueue(
-          encoder.encode(
-            sseFrame(
-              buildChunk({
-                id,
-                model: modelLabel,
-                delta: "",
-                finishReason: finalFinish,
-                usage: finalUsage,
-              })
-            )
-          )
-        );
-        controller.enqueue(encoder.encode(SSE_DONE));
-        controller.close();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        controller.enqueue(
-          encoder.encode(sseFrame({ error: { message, type: "provider_error" } }))
-        );
-        controller.enqueue(encoder.encode(SSE_DONE));
-        controller.close();
+    if (!stream) {
+      let content = "";
+      let usage;
+      let finishReason = "stop";
+      let message: Record<string, unknown> | undefined;
+      for await (const chunk of provider.chat(req)) {
+        content += chunk.delta;
+        if (chunk.message) message = chunk.message;
+        if (chunk.usage) usage = chunk.usage;
+        if (chunk.finishReason) finishReason = chunk.finishReason;
       }
-    },
-    async cancel() {
-      await iterator?.return?.();
-    },
-  });
+      return buildChatCompletion({
+        id,
+        model: parsed.data.model,
+        content,
+        usage,
+        finishReason,
+        message,
+      });
+    }
 
-  return new Response(body$, { headers: SSE_HEADERS });
-});
+    // Streaming response
+    for (const [k, v] of Object.entries(SSE_HEADERS)) set.headers[k] = v;
+    set.headers["Transfer-Encoding"] = "chunked";
+
+    const encoder = new TextEncoder();
+    const iterable = provider.chat(req);
+    let iterator: (AsyncIterator<ChatChunk> & { return?: () => Promise<IteratorResult<ChatChunk>> }) | undefined;
+    const modelLabel = parsed.data.model;
+
+    const body$ = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          // Initial chunk with role
+          controller.enqueue(
+            encoder.encode(
+              sseFrame(buildChunk({ id, model: modelLabel, delta: "", role: "assistant" }))
+            )
+          );
+          let finalUsage;
+          let finalFinish = "stop";
+          iterator = iterable[Symbol.asyncIterator]();
+          while (true) {
+            const next = await iterator.next();
+            if (next.done) break;
+            const chunk = next.value;
+            if (chunk.delta || chunk.deltaExtra) {
+              controller.enqueue(
+                encoder.encode(sseFrame(buildChunk({ id, model: modelLabel, delta: chunk.delta, deltaExtra: chunk.deltaExtra })))
+              );
+            }
+            if (chunk.usage) finalUsage = chunk.usage;
+            if (chunk.finishReason) finalFinish = chunk.finishReason;
+          }
+          controller.enqueue(
+            encoder.encode(
+              sseFrame(
+                buildChunk({
+                  id,
+                  model: modelLabel,
+                  delta: "",
+                  finishReason: finalFinish,
+                  usage: finalUsage,
+                })
+              )
+            )
+          );
+          controller.enqueue(encoder.encode(SSE_DONE));
+          controller.close();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          controller.enqueue(
+            encoder.encode(sseFrame({ error: { message, type: "provider_error" } }))
+          );
+          controller.enqueue(encoder.encode(SSE_DONE));
+          controller.close();
+        }
+      },
+      async cancel() {
+        await iterator?.return?.();
+      },
+    });
+
+    return new Response(body$, { headers: SSE_HEADERS });
+  },
+  {
+    body: ChatCompletionRequestSchema,
+    response: {
+      200: ChatCompletionSchema,
+      400: ErrorSchema,
+      404: ErrorSchema,
+      502: ErrorSchema,
+    },
+    detail: {
+      summary: "Create chat completion",
+      description: "Creates an OpenAI-compatible chat completion. Set stream=true to receive server-sent chat completion chunks instead of the JSON response schema shown here.",
+      tags: ["chat"],
+    },
+  }
+);
