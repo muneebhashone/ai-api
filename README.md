@@ -6,18 +6,26 @@ ai-api is a lightweight gateway that sits in front of hosted APIs and local CLIs
 
 Built on [Bun](https://bun.sh) + [Elysia](https://elysiajs.com). Fast to run, small to deploy, easy to extend.
 
-```
-┌─────────────────┐     OpenAI wire format      ┌──────────────────────────────┐
-│  Your app / SDK │ ──────────────────────────► │  ai-api  (localhost:3000)   │
-└─────────────────┘                             └──────────────┬───────────────┘
-                                                               │
-           ┌───────────────────────────────────────────────────┼────────────────────────┐
-           │                                                   │                        │
-           ▼                                                   ▼                        ▼
-   ┌───────────────┐   ┌──────────────┐   ┌─────────────┐   ┌──────────┐   ┌────────────┐
-   │  OpenRouter   │   │   DeepSeek   │   │ Claude Code │   │  Codex   │   │  OpenCode  │
-   │  (HTTP API)   │   │  (HTTP API)  │   │   (CLI)     │   │  (CLI)   │   │   (CLI)    │
-   └───────────────┘   └──────────────┘   └─────────────┘   └──────────┘   └────────────┘
+```mermaid
+flowchart TB
+  App["Your app / SDK"]
+  Gateway["ai-api · localhost:3000"]
+
+  subgraph providers["Providers"]
+    direction LR
+    OR["OpenRouter<br/>(HTTP API)"]
+    DS["DeepSeek<br/>(HTTP API)"]
+    CC["Claude Code<br/>(CLI)"]
+    CX["Codex<br/>(CLI)"]
+    OC["OpenCode<br/>(CLI)"]
+  end
+
+  App -->|"OpenAI wire format"| Gateway
+  Gateway --> OR
+  Gateway --> DS
+  Gateway --> CC
+  Gateway --> CX
+  Gateway --> OC
 ```
 
 ## Why ai-api?
